@@ -19,23 +19,30 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sync with upstream main
+      - name: Check for new upstream tag
         id: sync
         run: |
           git remote add upstream https://github.com/binwiederhier/ntfy-android.git
-          git fetch upstream
+          git fetch upstream --tags
 
-          LOCAL=$(git rev-parse HEAD)
-          UPSTREAM=$(git rev-parse upstream/main)
+          LATEST_TAG=$(git tag --list --sort=-version:refname | grep -E '^v[0-9]' | head -1)
+          UPSTREAM_TAG=$(git ls-remote --tags upstream \
+            | awk '{print $2}' \
+            | grep -E 'refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sed 's|refs/tags/||' \
+            | sort -V \
+            | tail -1)
 
-          if [ "$LOCAL" = "$UPSTREAM" ]; then
+          echo "upstream_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
+
+          if [ "$LATEST_TAG" = "$UPSTREAM_TAG" ]; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
-            git merge upstream/main --no-edit
-            git push origin main
+            git checkout -b build-$UPSTREAM_TAG upstream/$UPSTREAM_TAG 2>/dev/null \
+              || git checkout $UPSTREAM_TAG
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
-
+          
       - name: Set up JDK
         if: steps.sync.outputs.changed == 'true'
         uses: actions/setup-java@v5
@@ -67,26 +74,36 @@ jobs:
       - name: Sign APK
         if: steps.sync.outputs.changed == 'true'
         run: |
-          echo '${{ secrets.KEYSTORE_BASE64 }}' | base64 -d > release.keystore
+          VERSION=$(grep "versionName" app/build.gradle | head -1 | grep -oP '"\K[^"]+')
+          APK_NAME="ntfy-${VERSION}-play-release.apk"
+          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
 
+          echo '${{ secrets.KEYSTORE_BASE64 }}' | base64 -d > release.keystore
           apksigner sign \
             --ks release.keystore \
             --ks-pass pass:${{ secrets.KEYSTORE_PASSWORD }} \
             --ks-key-alias ${{ secrets.KEY_ALIAS }} \
             --key-pass pass:${{ secrets.KEY_PASSWORD }} \
-            --out ntfy-signed.apk \
+            --out "$APK_NAME" \
             app/build/outputs/apk/play/release/app-play-release-unsigned.apk
-
           rm release.keystore
+        id: sign
 
       - name: Create GitHub Release
         if: steps.sync.outputs.changed == 'true'
         run: |
-          VERSION=$(grep "versionName" app/build.gradle | head -1 | grep -oP '"\K[^"]+')
-          TAG="v${VERSION}-$(date +%Y%m%d%H%M)"
-          gh release create "$TAG" ntfy-signed.apk \
+          TAG="${{ steps.sync.outputs.upstream_tag }}"
+          APK_NAME="${{ steps.sign.outputs.apk_name }}"
+
+          UPSTREAM_NOTES=$(gh release view "$TAG" \
+            --repo binwiederhier/ntfy-android \
+            --json body -q .body 2>/dev/null || echo "")
+
+          NOTES=$(printf '> Custom build — base URL patched to custom server\n\n%s' "$UPSTREAM_NOTES")
+
+          gh release create "$TAG" "$APK_NAME" \
             --repo ${{ github.repository }} \
-            --title "ntfy $VERSION (custom build)" \
-            --notes "Automated build from upstream $(git rev-parse upstream/main)"
+            --title "ntfy $TAG (custom build)" \
+            --notes "$NOTES"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
