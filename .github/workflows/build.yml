@@ -85,7 +85,8 @@ jobs:
           VERSION=$(grep "versionName" app/build.gradle | head -1 | grep -oP '"\K[^"]+')
           TAG="v${VERSION}-$(date +%Y%m%d%H%M)"
           gh release create "$TAG" ntfy-signed.apk \
+            --repo ${{ github.repository }} \
             --title "ntfy $VERSION (custom build)" \
-            --notes "Automated build from upstream ${{ github.sha }}"
+            --notes "Automated build from upstream $(git rev-parse upstream/main)"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
