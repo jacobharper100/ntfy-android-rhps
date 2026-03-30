@@ -54,6 +54,13 @@ jobs:
         if: steps.sync.outputs.changed == 'true'
         run: ./gradlew assemblePlayRelease
 
+      - name: Set up Android build-tools
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          BUILD_TOOLS=$ANDROID_HOME/build-tools
+          LATEST=$(ls -v "$BUILD_TOOLS" | tail -1)
+          echo "$BUILD_TOOLS/$LATEST" >> $GITHUB_PATH
+
       - name: Sign APK
         if: steps.sync.outputs.changed == 'true'
         run: |
