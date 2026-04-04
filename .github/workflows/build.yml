@@ -33,7 +33,7 @@ jobs:
             | tail -1)
 
           echo "upstream_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
-          
+
           if [ "$LATEST_TAG" = "$UPSTREAM_TAG" ]; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
@@ -62,8 +62,12 @@ jobs:
       - name: Patch base URL
         if: steps.sync.outputs.changed == 'true'
         run: |
-          sed -i 's|<string name="app_base_url">.*</string>|<string name="app_base_url">${{ secrets.APP_BASE_URL }}</string>|' \
+          echo "Before patch:"
+          grep "app_base_url" app/src/main/res/values/values.xml
+          sed -i 's|<string name="app_base_url"[^>]*>.*</string>|<string name="app_base_url" translatable="false">${{ secrets.APP_BASE_URL }}</string>|' \
             app/src/main/res/values/values.xml
+          echo "After patch:"
+          grep "app_base_url" app/src/main/res/values/values.xml
 
       - name: Build APK
         if: steps.sync.outputs.changed == 'true'
