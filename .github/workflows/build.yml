@@ -62,12 +62,8 @@ jobs:
       - name: Patch base URL
         if: steps.sync.outputs.changed == 'true'
         run: |
-          echo "Before patch:"
-          grep "app_base_url" app/src/main/res/values/values.xml
           sed -i 's|<string name="app_base_url"[^>]*>.*</string>|<string name="app_base_url" translatable="false">${{ secrets.APP_BASE_URL }}</string>|' \
             app/src/main/res/values/values.xml
-          echo "After patch:"
-          grep "app_base_url" app/src/main/res/values/values.xml
 
       - name: Build APK
         if: steps.sync.outputs.changed == 'true'
