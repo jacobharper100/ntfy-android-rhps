@@ -42,6 +42,11 @@ jobs:
               || git checkout $UPSTREAM_TAG
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
+
+      - name: Nothing to do
+        if: steps.sync.outputs.changed == 'false'
+        run: |
+          echo "Fork is already up to date with upstream tag ${{ steps.sync.outputs.upstream_tag }}. Nothing to build."
           
       - name: Set up JDK
         if: steps.sync.outputs.changed == 'true'
@@ -75,7 +80,7 @@ jobs:
         if: steps.sync.outputs.changed == 'true'
         run: |
           VERSION=$(grep "versionName" app/build.gradle | head -1 | grep -oP '"\K[^"]+')
-          APK_NAME="ntfy-${VERSION}-play-release.apk"
+          APK_NAME="ntfy-rhps-${VERSION}-play-release.apk"
           echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
 
           echo '${{ secrets.KEYSTORE_BASE64 }}' | base64 -d > release.keystore
@@ -99,11 +104,11 @@ jobs:
             --repo binwiederhier/ntfy-android \
             --json body -q .body 2>/dev/null || echo "")
 
-          NOTES=$(printf '> Custom build — base URL patched to custom server\n\n%s' "$UPSTREAM_NOTES")
+          NOTES=$(printf '> Built with custom FCM configuration for ntfy.rhps.dev\n\n%s' "$UPSTREAM_NOTES")
 
           gh release create "$TAG" "$APK_NAME" \
             --repo ${{ github.repository }} \
-            --title "ntfy $TAG (custom build)" \
+            --title "$TAG"\
             --notes "$NOTES"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
